@@ -8,6 +8,9 @@
 // Updated to use IEDEMCoupling.h (EDEM 2017.2)
 // May 2017
 
+// Abhi: Updated to implement the flexible boundary conditions
+// Original EDEM code available in the altair EDEM library
+
 // EDEM Coupling include files
 #define _CRT_SECURE_NO_WARNINGS
 #include "IEDEMCoupling.h"
