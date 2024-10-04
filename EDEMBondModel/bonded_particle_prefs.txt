@@ -1,0 +1,15 @@
+BondFormationTime(s) 50
+TorqueFeedback(1=yes,2=no) 1
+BreakInCompression(1=yes,2=no) 1
+bond_damp 0.1
+rotation_friction 0.01
+SingleSphere_ContactRadius% 20
+
+A:B:C:D:E:F:G:H:I:J:K:L:M:N
+ElasticModulus(Pa): 1e5
+PlasticModulus(Pa): 1e5
+StiffnessRatio(Kn/Ks): 2.64
+BondDiskScale: 0.28
+YieldStress(Pa): 1.00e5
+NormalStrength(Pa): 100100
+ShearStrength(Pa): 50050
