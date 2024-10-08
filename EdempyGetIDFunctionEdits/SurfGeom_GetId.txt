@@ -4,7 +4,7 @@ C:\users\valisama\anaconda3\lib\site-packages\edempy\timestep\sgcontact.py
 22/04/2022 at 17:08
 	- edited getIds() method for randomly arranged particles
 	- Original method exists in the comments and can be changed
-The code snippet below if the method is lost:
+Modifications can be implemented in the original getids method:
 """
 
 def getIds(self):
