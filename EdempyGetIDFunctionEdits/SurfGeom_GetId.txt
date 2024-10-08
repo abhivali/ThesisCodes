@@ -1,0 +1,82 @@
+"""
+deck.timestep[t].contact.surfGeom.getIds()
+C:\users\valisama\anaconda3\lib\site-packages\edempy\timestep\sgcontact.py
+22/04/2022 at 17:08
+	- edited getIds() method for randomly arranged particles
+	- Original method exists in the comments and can be changed
+The code snippet below if the method is lost:
+"""
+
+def getIds(self):
+        """Returns 2D numpy.ndarray of id pairs for particles that are in contact with each other."""
+        numParticlesbyType = []
+        numSpheres = []
+        keys = [] ################ added by Abhilash on 22/04/2022 at 17:08 #################
+        geomNames = []
+
+        # Open h5 file for current timestep
+        f = h5py.File(self.__fname, 'r')
+        # Read num particles by type
+        for key in f[self.__particlePath].keys():
+            keys.append(str(key))########### added by Abhilash on 22/04/2022 at 17:08 #################
+            numParticlesbyType.append(int(f[self.__particlePath][str(key)].attrs["size"]))
+            # Get number of constituent spheres per particle type
+            numSpheres.append(int(len(f[self.__particlePath][str(key)]['spheres'])))
+
+        # Read num geometries by type
+        for key in f[self.__geomPath].keys():
+            geomNames.append(int(key))
+        
+        # Generate empty lookup table
+        pIDs = numpy.full([max(numParticlesbyType), len(numParticlesbyType)], numpy.NaN)
+
+        # =============================================================================
+        # # original method # remove the bottom loop and add this in case of errors
+        # # Read particle IDs for timestep
+        #  for p in range(len(numParticlesbyType)):
+        #      if numParticlesbyType[p] > 0:
+        #          pIDs[:numParticlesbyType[p], p] = f[self.__particlePath][str(p)]["ids"]
+        # =============================================================================
+        # Read particle IDs for timestep // edited by Abhilash for randomly arranged particles
+        # =============================================================================
+        for idx, p in enumerate(keys):
+            if numParticlesbyType[int(idx)] > 0:
+                pIDs[:numParticlesbyType[int(idx)], int(p)] = f[self.__particlePath][str(p)]["ids"]
+        # =============================================================================
+
+        # Close hdf5 file
+        f.close()
+
+        # Get contact data from timestep
+        contacts = self.getContacts()
+
+        # Get data of elem IDs for each geoemtry - from creator data. 
+        # JPM - Issue if geoemtry not present at simualtion start.
+        geomIDs = []
+        numGeomElems = []
+
+        for geom in range(len(geomNames)):
+            geomIDs.append(self.__creatorData.geometry[geom].getTriangleIds())
+            numGeomElems.append(len(geomIDs[geom]))
+
+        # Generate empty lookup table
+        gIDs = numpy.full([max(numGeomElems), int(geomNames[-1])+1], numpy.NaN)
+
+        # Fill lookup table with appropriate geometries
+        for geom in range(len(geomNames)):
+            ind = int(geomNames[geom])
+            gIDs[:numGeomElems[geom], ind] = geomIDs[geom]
+
+
+        particle_spheres = numpy.tile(numSpheres, [contacts.shape[0], 1])
+
+        numSpheres1 = numpy.take(particle_spheres, contacts[:, 0])
+        indexNumber1 = (contacts[:, 1] - (contacts[:, 1] % numSpheres1)) / numSpheres1
+        indexNumber1 = indexNumber1.astype(int)
+
+        # Third column gives the geometry type
+        # Fourth column value from the contacts data group is the row number that corresponds to the triangle id in the triangle ids data (starting from 0)
+        idPairs = [pIDs[indexNumber1, contacts[:, 0]],
+                   gIDs[contacts[:, 3], contacts[:, 2]]]
+
+        return numpy.transpose(numpy.array(idPairs)).astype(int)
