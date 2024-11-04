@@ -305,9 +305,7 @@ def solve_conductivity_coo(G_coo_mat, U_0_1 = 1, regularise = False, regularizat
     G_coo_mat : [scipy.sparse.coo_matrix] The conductivity matrix in COO (Coordinate) format, representing the conductance between nodes in the network.
     U_0_1 : [float, optional] The potential difference between the electrodes. 
         The default value is 1.
-    
-    regularization : add a small value to the diagonal to avoid singular matrix
-    use_lsqr : if True, uses scipy.sparse.linalg.lsqr instead of spsolve
+    regularization : add a small value to the diagonal to avoid singular matrix, default regularization_value = 1e-8
     ----------------------------------
     Returns
     ----------------------------------
@@ -339,7 +337,6 @@ def solve_conductivity_coo(G_coo_mat, U_0_1 = 1, regularise = False, regularizat
     # Check for zero elements on the diagonal
     if np.any(Shrink_G_mat.diagonal() == 0):
         print("-- /!\\ Warning: The matrix has zero elements on the diagonal.")
-
     
     if regularise:
         # Apply regularization to treat the zero diagonals (not needed if the clusters are properly treated)
@@ -353,7 +350,7 @@ def solve_conductivity_coo(G_coo_mat, U_0_1 = 1, regularise = False, regularizat
     curr_vec[-2, 0] += curr_vec[-1, 0]
     Shrink_curr_vec = curr_vec[:-1]
 
-    # Reorder the matrix and vector using Reverse Cuthill-McKee for better numerical stability
+    # Reorder the matrix and vector using Reverse Cuthill-McKee for better numerical stability (Optional)
     order = reverse_cuthill_mckee(Shrink_G_mat)
     Shrink_G_mat = Shrink_G_mat[order, :][:, order]
     Shrink_curr_vec = Shrink_curr_vec[order]
@@ -368,7 +365,6 @@ def solve_conductivity_coo(G_coo_mat, U_0_1 = 1, regularise = False, regularizat
     phi_offset = phi_end - phi_vec[-1, 0]
     phi_vecf = phi_vec + phi_offset
     phi_vecf = np.vstack((phi_vecf, 0)).reshape(-1, 1)
-
     print('-- Matrix solved for voltage vector.')
     
     return G_Electrodenode, phi_vecf
