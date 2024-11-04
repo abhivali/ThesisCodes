@@ -19,20 +19,20 @@ from scipy.sparse import coo_matrix, csc_matrix, csr_matrix, hstack, vstack, eye
 from scipy.sparse.linalg import spsolve, lsqr
 from scipy.sparse.csgraph import reverse_cuthill_mckee
 
+import matplotlib.pyplot as plt
+from sys import getsizeof
+
+"""
+Saving the conductivity data in the form of .vtk file
+/!\ remove the pyfedic module and its dependent code snips if other saving methods are used
+"""
 from pyfedic.mesh import Mesh
 from pyfedic.cells import T4
 from pyfedic.io import write_mesh
 
-import matplotlib.pyplot as plt
-from sys import getsizeof
-
-plt.rcParams['xtick.labelsize'] = 14   # Set x-axis tick label size
-plt.rcParams['ytick.labelsize'] = 14   # Set y-axis tick label size
-plt.rcParams['xtick.major.size'] = 8   # Set size of major x-axis ticks
-plt.rcParams['ytick.major.size'] = 8   # Set size of major y-axis ticks
-plt.rcParams['xtick.minor.size'] = 4   # Set size of minor x-axis ticks (if applicable)
-plt.rcParams['ytick.minor.size'] = 4   # Set size of minor y-axis ticks (if applicable)
-
+# ---------------------------------------------------------------------------------
+#%% Function definitions
+# ---------------------------------------------------------------------------------
 def neighbour_list(current_node,contact_loc):
     """
     function to extract the neighbours based on the contact between particles
@@ -418,7 +418,7 @@ def estimate_EffectiveResistances(G_Electrodenode, phi_vecf, Floaters, VirtualNo
     for co in k:
         i_elecNode = np.vstack((i_elecNode,(G_Electrodenode[int(co),0] * (phi_vecf[ElectrodeNode,0] - phi_vecf[int(co),0]))))
     
-    i_eff = np.sum(i_elecNode)
+    i_eff = np.nansum(i_elecNode)
     R_eff = U_0_1/i_eff
     return R_eff, i_eff, phi_vecf
 
@@ -447,7 +447,121 @@ def CorrectLengthPeriodic(Pos1, Pos2, X_bounds , Y_bounds):
     
     return Distance
 
+def Find_Neighbours(pairs, num_spheres):
+    """
+    ----------------------------------
+    Parameters
+    ----------------------------------
+    pairs = numpy array of pairs (nx2) 
+    example : [[0,1],[0,2],[1,2],[2,3]]
+    
+    num_spheres = integer 
+    Number of sphere ids to check
+    ----------------------------------
+    Returns
+    ----------------------------------
+    neighbour_list = pairs converted to dictionary of neighbours
+    {"0": ["1", "2"],
+     "1": ["0","2"],
+     "2": ["0","1","3"],
+     "3": ["2"]  
+     "4": Nan # 4 not present in the pairs
+     "5": Nan # 4 not present in the pairs }
+    """
+    neighbour_list = {i: [] for i in range(num_spheres+1)}
 
+    for pair in pairs:
+        neighbour_list[pair[0]].append(pair[1])
+        neighbour_list[pair[1]].append(pair[0])
+
+    for key in neighbour_list:
+        neighbour_list[key] = sorted(set(neighbour_list[key]))
+
+    return neighbour_list
+
+
+def find_connected_points(points):
+    """
+    ----------------------------------
+    Parameters
+    ----------------------------------
+    points : dictionary of neighbours
+         {"0": ["1", "2"],
+          "1": ["0","2"],
+          "2": ["0","1","3"],
+          "3": ["2"]  
+          "4": Nan # 4 not present in the pairs
+          "5": Nan # 4 not present in the pairs }
+    ----------------------------------
+    Returns
+    ----------------------------------
+    components : dictionary
+        dictionary of connected clusters.
+
+    """
+    # if the arrays are too long the search recursion will stop
+    if len(points) > getrecursionlimit():
+        setrecursionlimit(len(points) + 2) 
+    
+    def dfs(node, component):
+        component.add(node)
+        visited.add(node)
+        for neighbor in points[node]:
+            if neighbor not in visited:
+                dfs(neighbor, component)
+
+    visited = set()
+    components = []
+
+    for point in points:
+        if point not in visited:
+            component = set()
+            dfs(point, component)
+            components.append(component)
+    return components
+
+
+def Exclude_PeriodicBonding(data_L, data_R, X_bounds = [-25.5,25.5], Y_bounds = [-25.5,25.5]):
+    """
+    particles of data_i are bonded to particles of data_f
+    the input arrays are the positions of these particles
+    Bonded particles : | A1 B1 | 
+                       | A2 B2 |
+                       | :  :  |
+                       | An Bn |
+    ----------------------------------
+    Parameters
+    ----------------------------------      
+    data_L : Position array of particles A  [X Y Z]
+    data_R : Position array of particles B  [X Y Z]
+    
+    X_bounds : list [X_min, X_max], optional
+        boundary limits across x. The default is [-25.5,25.5].
+    Y_bounds : list [Y_min, Y_max], optional
+        boundary limits across y. The default is [-25.5,25.5].
+    ----------------------------------
+    Returns
+    ----------------------------------
+    boolean array of Points to exclude
+    True : Exclude
+    False: do not exclude
+    """
+    Xbl, = np.diff(X_bounds)
+    Ybl, = np.diff(Y_bounds)
+
+    # estimate distance
+    delx, dely, delz = (data_R - data_L).T 
+    
+    # check for the periodic condition
+    outxp = delx > Xbl/2
+    outxn = delx < -Xbl/2
+    
+    outyp = dely > Ybl/2
+    outyn = dely < -Ybl/2
+    
+    out = outxp | outxn | outyp | outyn
+
+    return out
 
 
 #%% 
@@ -459,7 +573,7 @@ def CorrectLengthPeriodic(Pos1, Pos2, X_bounds , Y_bounds):
 # =============================================================================
 # /!\ program suitable for bonding v2 condition ensure before starting the simulation
 
-file_name =  r"F:\Data\02.EDEM\#EDEM_Abhilash_Thesis_Models_new\4_Simulation_results\BondFailureEvolution_ImpactOfMilderSwelling\PVDF\Sim3\Abhi_ThesisModel_50x50_SF64_DY_3CY_EP.dem"
+file_name =  r"xxxxxFileLocationxxxxx/SimulationFileName.dem"
                                  
 RunForParametricTest = True
 VtkSave = True
@@ -467,10 +581,11 @@ Binning = False
 StepsManualInput = False
 ElecNodesFromEDEM = True
 
-NewPlot = False
 
-print(txtc.G + "________Extracting Deck ________" + txtc.ENDC)
 
+# EDEM deck file opening and saving as pickle for optimised future use
+# -----------------------------------------------------------------------------
+print("________Extracting Deck ________")
 file_path = Path(file_name)
 pickle_Save = file_path.parent
 pickleFileName = file_path.parts[-1][0:-4] +'.pickle'
@@ -499,13 +614,15 @@ if saveDeck == True:
 
     with open( pickle_Save / pickleFileName, 'wb') as file:
         pickle.dump(deck, file) # saving as pickle file as it is easier to load
+# -----------------------------------------------------------------------------
 
 
 XBounds = [deck.creatorData[0].domain.getXMin(), deck.creatorData[0].domain.getXMax()]
 YBounds = [deck.creatorData[0].domain.getYMin(), deck.creatorData[0].domain.getYMax()]
 
-#Binning dimensions
-#------------------
+
+#Binning dimensions (optional)
+# -----------------------------------------------------------------------------
 if Binning:
     XBounds = [-30,30]
     YBounds = [-30,30]
@@ -515,11 +632,10 @@ if Binning:
 
 
 #Simulation Timesteps
-#--------------------
+# -----------------------------------------------------------------------------
 t_b = 5 #bond formation timestep
-t_start = 40 #start step
+t_start = 40 #start step for swelling
 step_size = 25
-# t_final = 6378
 t_final = len(deck.timestepKeys)-1
 t_steps = np.arange(t_start,t_final,step_size).tolist()
 if (t_steps[-1] != t_final): t_steps.append(t_final)
@@ -546,21 +662,21 @@ if StepsManualInput == True:
     t_steps = np.array([40,300,305])
     
 # domain length
-#--------------
+# -----------------------------------------------------------------------------
 DomainXlen = (deck.timestep[0].domainMax[0] - deck.timestep[0].domainMin[0])
 
 # constants
-#----------
+# -----------------------------------------------------------------------------
+# /!\ The values of conductivity do not matter as the code aims only for the normalised impact
 G_bond = 375 # electronic conductivity of CBD = 0.375e3[S/m] reference: DOI:10.1149/2.0981813jes
 BondDiskScale = 0.2
 
-# -------------------------------------
 gamma = 0.2# Contact radius for overlap correction
 model_num = 3
 
 
 # Save voltages in a visualisation file
-# -------------------------------------
+# -----------------------------------------------------------------------------
 if VtkSave:
     # establish the saving folder
     save_folder = Path(file_name).parent
@@ -588,7 +704,7 @@ dict_Virtualconts = {}
 dict_GeomPressure ={}
 
 # search for the propper bin data locations
-#------------------------------------------
+# -----------------------------------------------------------------------------
 if Binning:
     xSearch = np.logical_and( data0[:, 1] > XBounds[0] , data0[:, 1] < XBounds[1])
     ySearch = np.logical_and( data0[:, 2] > YBounds[0] , data0[:, 2] < YBounds[1])
@@ -605,7 +721,7 @@ if Binning:
 
 
 # Identification of particle type
-#--------------------------------
+# -----------------------------------------------------------------------------
 # Graphite = np.asarray(["A","B","C","D","E","F","G"])
 Graphite_Radii = np.asarray([1.99, 2.8, 3.6, 4.8, 6, 6.5, 7.5])
 # Silicon = np.asarray(["H","I","J","K","L","M","N"])
@@ -615,20 +731,15 @@ for i in Graphite_Radii:
     PType[p_rad0 == i] = True # identify graphite particles and set type to True
 
 
-
-
-
-
-
-
+# Save initial mesh for future use to save data (optional)
+# -----------------------------------------------------------------------------
 if VtkSave:
     print("________Generating initial mesh for particles")
     nodes = data0[:,1:4]
     cells = Delaunay(nodes).simplices
     m = Mesh.new(nodes, {T4: cells})
     
-# for t in t_max:
-# for t in t_str:
+
 for t in t_steps:
     print(f"________Processing data for the time step: {t} ________")
     # extracting values for the required time step
@@ -657,7 +768,7 @@ for t in t_steps:
     
     
     #Select the interactions with good ids that are binned
-    #-----------------------------------------------------
+    # -----------------------------------------------------------------------------
     if Binning:
         # Initiate Arrays
         BondBool0 = np.array([False] * len(IntactBnd))
@@ -673,7 +784,7 @@ for t in t_steps:
     
     
     # Identifying particles in contact with the geometries
-    #-----------------------------------------------------
+    # -----------------------------------------------------------------------------
     if(t == t_steps[0]):
         if ElecNodesFromEDEM:
             VnodeStack, VnodesOverlaps = Geometry_NodeInteraction(deck,t, NumParticles = data.shape[0])
@@ -708,15 +819,29 @@ for t in t_steps:
             VnodesOverlaps = (np.hstack((OverlapB, OverlapT))).astype(int)
             
             
-    # identifying the floaters:
-    #--------------------------
+    # identifying the floaters (Including inactive clusters that are bonded):
+    # -----------------------------------------------------------------------------
     all_interactions = np.vstack((IntactBnd, VnodeStack))
     
-    if Binning:
-        floater = np.setdiff1d(BinLocs, all_interactions)
-    else :  
-        floater = np.setdiff1d(np.arange(len(data)), all_interactions)
+    # Remove inactive clusters: identify the ones that dont have the electrode nodes 
+    neighbours_b = Find_Neighbours(IntactBnd, data.shape[0])
+    bonded_clusters_b = find_connected_points(neighbours_b)
+
+    V1 = set(VnodeStack[VnodeStack[:,0] == VnodeStack[0,0], 1])
+    V2 = set(VnodeStack[VnodeStack[:,0] == VnodeStack[-1,0],1])
     
+    active_Clusters = []
+    for cluster in bonded_clusters_b:
+        temp1 = cluster.intersection(V1)
+        temp2 = cluster.intersection(V2)
+        if len(temp1)>0 and len(temp2)>0:
+            active_Clusters = np.append(active_Clusters, np.array(list(cluster)))
+    active_Clusters = np.append(active_Clusters, [data.shape[0], data.shape[0]+1])
+    
+    if Binning:
+        floater = np.setdiff1d(BinLocs, active_Clusters)
+    else :  
+        floater = np.setdiff1d(np.arange(len(data)), active_Clusters)
     
     if Binning:
         # create new data set with all the data within the bin
@@ -780,20 +905,20 @@ for t in t_steps:
     
     
     # conductivity matrix generation:
-    #--------------------------------
+    # -----------------------------------------------------------------------------
     print('________Generating G_mat')
     cpu0 = perf_counter()
     
     #### Estimate the conductivity factor 
-    #------------------------------------
+    # -----------------------------------------------------------------------------
     # Bond conductivity
-    #------------------
+    # -----------------------------------------------------------------------------
     # bond_Gfac = np.divide(BondDiskArea_t,BondLength_t)
     bond_Gfac = np.ones(len(BondDiskArea_t))
     
     
     # conductivity between particles and the plate particle to geometry (P2G)
-    #------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
     if (t == t_steps[0]) and (model_num == 2 or model_num == 3):
         VnodesOverlaps = VnodesOverlaps.flatten() + gamma*(p_rad[VnodeStack[:,1]])
         VparticlesRadii = p_rad[VnodeStack[:,1]]
@@ -801,7 +926,7 @@ for t in t_steps:
     
     
     # modifying the contact overlaps to consider the contact radius for Gmat estimation
-    #----------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
     G_coo_combined, G_mat_no_Floaters = GMat_generation(p_rad, 
                                                         bond_Gfac, 
                                                         P2G_Gfac,
@@ -816,7 +941,7 @@ for t in t_steps:
     
     
     # solving matrix for voltage vectors:
-    #------------------------------------
+    # -----------------------------------------------------------------------------
     print('Solving G_mat')
     cpu0 = perf_counter()
     
