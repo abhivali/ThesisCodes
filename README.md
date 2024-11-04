@@ -6,4 +6,6 @@ Three C++ code snips corresponding to the implementation of the following models
 2. Particle linear swelling model
 3. Implementation of Bi-linear isotropic Elastoplastic bond model
 
-Python code corresponding to the application of resistance network method to the assembly of particles:
+Python code corresponding to the application of 
+1. Resistance network method to the assembly of particles
+2. Kinematic homogenization using pyfedic python module
